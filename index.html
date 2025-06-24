@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EpiPen Finder Map</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+    #map { height: 90vh; width: 100%; }
+    header {
+      background: #4c0371;
+      color: white;
+      padding: 1rem;
+      text-align: center;
+    }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+</head>
+<body>
+  <header>
+    <h1>EpiPen Finder Map</h1>
+    <p>Click anywhere on the map to tag a public location that carries an EpiPen.</p>
+  </header>
+  <div id="map"></div>
+
+  <script src="app.js"></script>
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyASHf6jmZTRP_zxWdSbaI205EMmlg-Q0Qc&libraries=places&callback=initMap"></script>
+</body>
+</html>
