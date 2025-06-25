@@ -92,7 +92,8 @@ window.initMap = async function () {
 
   const map = new google.maps.Map(document.getElementById("map"), {
     center: mapCenter,
-    zoom: zoomLevel
+    zoom: zoomLevel,
+    gestureHandling: "greedy"
   });
   // Load existing markers from database
   const snapshot = await db.collection("locations").get();
