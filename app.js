@@ -17,14 +17,7 @@ const auth = firebase.auth();
 auth.signInAnonymously().catch(console.error);
 
 // Embedded EpiPen icon as SVG data URL (32x32)
-const iconDefault = "data:image/svg+xml;base64," + btoa(`
-<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-  <rect x="6" y="12" width="20" height="8" rx="4" fill="#ff6b35" stroke="#333" stroke-width="1"/>
-  <rect x="8" y="14" width="16" height="4" rx="2" fill="#ffae35"/>
-  <text x="16" y="18" text-anchor="middle" fill="#333" font-size="8" font-family="Arial">EPI</text>
-  <circle cx="24" cy="16" r="2" fill="#ff0000"/>
-</svg>
-`);
+const iconDefault = "epipen_icon_transparent_32x32.png";
 
 // Verified icon (green version)
 const iconVerified = "data:image/svg+xml;base64," + btoa(`
