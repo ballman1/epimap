@@ -89,9 +89,9 @@ function createMarker(map, data, docId, likes = 0, flags = 0) {
 async function searchAndAddMedicalFacilities(map, center, radius = 10000) {
   console.log('Starting medical facility search...', { center, radius });
   
-  if (!google.maps.places) {
-    console.error('Google Places library not loaded! Add &libraries=places to your script tag');
-    alert('Places API not loaded. Please check your Google Maps script tag includes &libraries=places');
+  if (!google.maps.places || !google.maps.places.Place) {
+    console.error('Google Places API (New) not loaded properly!');
+    alert('Places API not loaded. Please check your Google Maps configuration.');
     return;
   }
   
@@ -111,16 +111,15 @@ async function searchAndAddMedicalFacilities(map, center, radius = 10000) {
     console.log(`Searching for: ${query}`);
     
     try {
-      // Use the new searchByText method
+      // Use the new searchByText method with correct parameters
       const request = {
-        fields: ['id', 'displayName', 'formattedAddress', 'location', 'businessStatus'],
+        fields: ['id', 'displayName', 'formattedAddress', 'location'],
         locationBias: {
           center: center,
-          radius: radius,
+          radius: radius
         },
         textQuery: query,
-        maxResultCount: 10,
-        languageCode: 'en',
+        maxResultCount: 10
       };
 
       const { places } = await google.maps.places.Place.searchByText(request);
@@ -129,6 +128,8 @@ async function searchAndAddMedicalFacilities(map, center, radius = 10000) {
         console.log(`No results for: ${query}`);
         continue;
       }
+
+      console.log(`Found ${places.length} results for: ${query}`);
 
       for (const place of places) {
         // Skip if already processed
@@ -161,7 +162,7 @@ async function searchAndAddMedicalFacilities(map, center, radius = 10000) {
           try {
             const docRef = await db.collection("locations").add(locationData);
             createMarker(map, locationData, docRef.id, 0, 0);
-            console.log(`Added medical facility: ${place.displayName}`);
+            console.log(`✅ Added medical facility: ${place.displayName}`);
           } catch (error) {
             console.error(`Error adding medical facility ${place.displayName}:`, error);
           }
@@ -171,70 +172,20 @@ async function searchAndAddMedicalFacilities(map, center, radius = 10000) {
       }
     } catch (error) {
       console.error(`Error searching for ${query}:`, error);
-      
-      // Fallback to old method if available (for compatibility)
-      if (google.maps.places.PlacesService) {
-        console.log('Trying fallback with PlacesService...');
-        await searchWithOldAPI(map, center, radius, query);
-      }
+      // No fallback - new API keys can't use old PlacesService
     }
   }
   
   console.log(`Medical facility search complete. Total found: ${totalFound}`);
   if (totalFound === 0) {
-    console.warn('No medical facilities found. Check console for errors.');
+    console.warn('No medical facilities found. This might be a quota or billing issue.');
+    alert('No medical facilities found. Please ensure billing is enabled in Google Cloud Console.');
+  } else {
+    alert(`Found and added ${totalFound} medical facilities!`);
   }
 }
 
-// Fallback function for older API keys that can still use PlacesService
-async function searchWithOldAPI(map, center, radius, keyword) {
-  try {
-    const service = new google.maps.places.PlacesService(map);
-    const request = {
-      location: center,
-      radius: radius,
-      keyword: keyword,
-      type: ['hospital', 'doctor', 'health']
-    };
-
-    const results = await new Promise((resolve, reject) => {
-      service.nearbySearch(request, (results, status) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK) {
-          resolve(results);
-        } else {
-          resolve([]);
-        }
-      });
-    });
-
-    for (const place of results) {
-      const existingQuery = await db.collection("locations")
-        .where("placeId", "==", place.place_id)
-        .get();
-
-      if (existingQuery.empty) {
-        const locationData = {
-          name: place.name,
-          type: "medical-facility",
-          address: place.vicinity || "Address not available",
-          lat: place.geometry.location.lat(),
-          lng: place.geometry.location.lng(),
-          placeId: place.place_id,
-          submittedAt: new Date(),
-          verifiedByBusiness: true,
-          isMedicalFacility: true,
-          autoDetected: true
-        };
-
-        const docRef = await db.collection("locations").add(locationData);
-        createMarker(map, locationData, docRef.id, 0, 0);
-        console.log(`Added (via fallback): ${place.name}`);
-      }
-    }
-  } catch (error) {
-    console.error('Fallback search also failed:', error);
-  }
-}
+// Remove the old API fallback function since it won't work with new API keys
 
 // Function to scan for medical facilities in the current viewport
 async function scanCurrentArea(map) {
