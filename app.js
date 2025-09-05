@@ -159,6 +159,11 @@ async function searchAndAddMedicalFacilities(map, center, radius = 10000) {
       console.error(`Error searching for ${searchTerm.keyword}:`, error);
     }
   }
+  
+  console.log(`Medical facility search complete. Total found: ${totalFound}`);
+  if (totalFound === 0) {
+    console.warn('No medical facilities found. This might indicate a Places API issue.');
+  }
 }
 
 // Function to scan for medical facilities in the current viewport
