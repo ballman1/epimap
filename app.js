@@ -1,4 +1,4 @@
-// Complete EpiPen Community Map App with Auto Medical Facility Detection
+// Complete EpiPen Community Map App with New Places API Support
 
 const firebaseConfig = {
   apiKey: "AIzaSyAEqp-BO5SGdoKEB154FfgVsRP0cdaxpAU",
@@ -85,63 +85,75 @@ function createMarker(map, data, docId, likes = 0, flags = 0) {
   return marker;
 }
 
-// Function to search and add medical facilities
+// Function to search and add medical facilities using new Places API
 async function searchAndAddMedicalFacilities(map, center, radius = 10000) {
-  const service = new google.maps.places.PlacesService(map);
+  console.log('Starting medical facility search...', { center, radius });
   
-  // Search terms for medical facilities that typically have epinephrine
-  const medicalTypes = [
-    { type: 'hospital', keyword: 'emergency room' },
-    { type: 'hospital', keyword: 'emergency department' },
-    { type: 'doctor', keyword: 'urgent care' },
-    { type: 'doctor', keyword: 'walk in clinic' },
-    { type: 'health', keyword: 'emergency medical' }
+  if (!google.maps.places) {
+    console.error('Google Places library not loaded! Add &libraries=places to your script tag');
+    alert('Places API not loaded. Please check your Google Maps script tag includes &libraries=places');
+    return;
+  }
+  
+  // Search terms for medical facilities
+  const searchQueries = [
+    'hospital emergency room',
+    'urgent care clinic',
+    'walk in clinic',
+    'emergency medical center',
+    'medical center'
   ];
 
-  const processedPlaces = new Set(); // To avoid duplicates
+  const processedPlaces = new Set();
+  let totalFound = 0;
 
-  for (const searchTerm of medicalTypes) {
-    const request = {
-      location: center,
-      radius: radius,
-      type: [searchTerm.type],
-      keyword: searchTerm.keyword
-    };
-
+  for (const query of searchQueries) {
+    console.log(`Searching for: ${query}`);
+    
     try {
-      const results = await new Promise((resolve, reject) => {
-        service.nearbySearch(request, (results, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK) {
-            resolve(results);
-          } else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-            resolve([]);
-          } else {
-            reject(new Error(`Places search failed: ${status}`));
-          }
-        });
-      });
+      // Use the new searchByText method
+      const request = {
+        fields: ['id', 'displayName', 'formattedAddress', 'location', 'businessStatus'],
+        locationBias: {
+          center: center,
+          radius: radius,
+        },
+        textQuery: query,
+        maxResultCount: 10,
+        languageCode: 'en',
+      };
 
-      for (const place of results) {
-        // Skip if we've already processed this place
-        if (processedPlaces.has(place.place_id)) continue;
-        processedPlaces.add(place.place_id);
+      const { places } = await google.maps.places.Place.searchByText(request);
+      
+      if (!places || places.length === 0) {
+        console.log(`No results for: ${query}`);
+        continue;
+      }
+
+      for (const place of places) {
+        // Skip if already processed
+        if (processedPlaces.has(place.id)) continue;
+        processedPlaces.add(place.id);
+        totalFound++;
+
+        console.log(`Found medical facility: ${place.displayName}`);
 
         // Check if this medical facility already exists in our database
         const existingQuery = await db.collection("locations")
-          .where("placeId", "==", place.place_id)
+          .where("placeId", "==", place.id)
           .get();
 
         if (existingQuery.empty) {
           // Add new medical facility to database
           const locationData = {
-            name: place.name,
+            name: place.displayName || 'Medical Facility',
             type: "medical-facility",
-            address: place.vicinity || place.formatted_address || "Address not available",
-            lat: place.geometry.location.lat(),
-            lng: place.geometry.location.lng(),
-            placeId: place.place_id,
+            address: place.formattedAddress || "Address not available",
+            lat: place.location.lat(),
+            lng: place.location.lng(),
+            placeId: place.id,
             submittedAt: new Date(),
-            verifiedByBusiness: true, // Medical facilities are auto-verified
+            verifiedByBusiness: true,
             isMedicalFacility: true,
             autoDetected: true
           };
@@ -149,20 +161,78 @@ async function searchAndAddMedicalFacilities(map, center, radius = 10000) {
           try {
             const docRef = await db.collection("locations").add(locationData);
             createMarker(map, locationData, docRef.id, 0, 0);
-            console.log(`Added medical facility: ${place.name}`);
+            console.log(`Added medical facility: ${place.displayName}`);
           } catch (error) {
-            console.error(`Error adding medical facility ${place.name}:`, error);
+            console.error(`Error adding medical facility ${place.displayName}:`, error);
           }
+        } else {
+          console.log(`Already exists: ${place.displayName}`);
         }
       }
     } catch (error) {
-      console.error(`Error searching for ${searchTerm.keyword}:`, error);
+      console.error(`Error searching for ${query}:`, error);
+      
+      // Fallback to old method if available (for compatibility)
+      if (google.maps.places.PlacesService) {
+        console.log('Trying fallback with PlacesService...');
+        await searchWithOldAPI(map, center, radius, query);
+      }
     }
   }
   
   console.log(`Medical facility search complete. Total found: ${totalFound}`);
   if (totalFound === 0) {
-    console.warn('No medical facilities found. This might indicate a Places API issue.');
+    console.warn('No medical facilities found. Check console for errors.');
+  }
+}
+
+// Fallback function for older API keys that can still use PlacesService
+async function searchWithOldAPI(map, center, radius, keyword) {
+  try {
+    const service = new google.maps.places.PlacesService(map);
+    const request = {
+      location: center,
+      radius: radius,
+      keyword: keyword,
+      type: ['hospital', 'doctor', 'health']
+    };
+
+    const results = await new Promise((resolve, reject) => {
+      service.nearbySearch(request, (results, status) => {
+        if (status === google.maps.places.PlacesServiceStatus.OK) {
+          resolve(results);
+        } else {
+          resolve([]);
+        }
+      });
+    });
+
+    for (const place of results) {
+      const existingQuery = await db.collection("locations")
+        .where("placeId", "==", place.place_id)
+        .get();
+
+      if (existingQuery.empty) {
+        const locationData = {
+          name: place.name,
+          type: "medical-facility",
+          address: place.vicinity || "Address not available",
+          lat: place.geometry.location.lat(),
+          lng: place.geometry.location.lng(),
+          placeId: place.place_id,
+          submittedAt: new Date(),
+          verifiedByBusiness: true,
+          isMedicalFacility: true,
+          autoDetected: true
+        };
+
+        const docRef = await db.collection("locations").add(locationData);
+        createMarker(map, locationData, docRef.id, 0, 0);
+        console.log(`Added (via fallback): ${place.name}`);
+      }
+    }
+  } catch (error) {
+    console.error('Fallback search also failed:', error);
   }
 }
 
@@ -191,7 +261,7 @@ async function scanCurrentArea(map) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   const radius = Math.min(R * c, 50000); // Cap at 50km
   
-  await searchAndAddMedicalFacilities(map, center, radius);
+  await searchAndAddMedicalFacilities(map, {lat: center.lat(), lng: center.lng()}, radius);
 }
 
 window.initMap = async function () {
@@ -295,6 +365,7 @@ window.initMap = async function () {
     idleTimer = setTimeout(() => {
       // Only auto-scan if zoom level is sufficient (not too zoomed out)
       if (map.getZoom() >= 11) {
+        console.log('Auto-scanning area for medical facilities...');
         scanCurrentArea(map);
       }
     }, 3000); // Wait 3 seconds after map stops moving
